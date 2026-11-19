@@ -1,0 +1,61 @@
+name: Daily Crypto SEPA+VCP Screener Update
+
+on:
+  schedule:
+    # Times are UTC. Daily candles close at 00:00 UTC; this runs once the day is complete.
+    - cron: '25 0 * * *'    # ~11:25 AM Melbourne (10:25 AM in winter), every day
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crypto-screener
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: "!contains(github.event.head_commit.message, 'Deploy:')"
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run screener and build dashboard
+        env:
+          # Optional: a free CoinGecko demo key raises the rate limit. Add it as a repository secret.
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+        run: python screener.py
+      - name: Save refreshed category snapshot
+        run: |
+          git config user.name "Crypto Screener Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- data/categories.json; then
+            git add data/categories.json
+            git commit -m "Deploy: refresh CoinGecko category snapshot"
+            git push origin HEAD:main || echo "Snapshot push skipped"
+          fi
+      - name: Deploy to gh-pages branch
+        run: |
+          cp index.html /tmp/index.html
+          rm -f index.html
+          git fetch origin gh-pages 2>/dev/null || true
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git checkout gh-pages
+            git pull origin gh-pages
+          else
+            git checkout --orphan gh-pages
+          fi
+          git rm -rf . 2>/dev/null || true
+          cp /tmp/index.html index.html
+          git add index.html
+          git commit -m "Deploy: $(TZ=Australia/Melbourne date '+%d %b %Y %H:%M %Z')" || echo "Nothing to commit"
+          git push origin gh-pages
