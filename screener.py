@@ -28,7 +28,7 @@ import requests
 MELBOURNE = ZoneInfo("Australia/Melbourne")
 
 UNIVERSE_SIZE   = int(os.environ.get("UNIVERSE_SIZE", 200))
-SEPA_MIN        = 3
+SEPA_MIN        = 0           # list every screened coin (the share screeners hide scores under 3)
 MIN_ADV         = 1_000_000   # thin-trading threshold: avg daily traded value (USD) on the exchange used
 VOL_BREAKOUT    = 1.5
 VCP_MIN         = 2
